@@ -1,0 +1,62 @@
+local distanceThreshold = 10  -- Maximum distance to detect walls
+local trussOffset = Vector3.new(0.6, 0, 0)  -- Offset position for the truss
+
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+local trussPart = nil -- Variable to hold the created truss part
+
+local function createTruss(position, normal)
+	if trussPart then
+		-- If a truss part already exists, remove it before creating a new one
+		trussPart:Destroy()
+		trussPart = nil
+	end
+
+	trussPart = Instance.new("TrussPart")
+	trussPart.Anchored = true
+	trussPart.BrickColor = BrickColor.new("Bright yellow")
+	trussPart.Size = Vector3.new(5, 1, 1)
+
+	-- Calculate the offset position in front of the character
+	local offsetPosition = position + (rootPart.CFrame.LookVector * trussOffset)
+	trussPart.Position = offsetPosition
+	trussPart.Parent = workspace
+
+	-- Adjust the truss orientation to match the wall
+	trussPart.CFrame = CFrame.new(offsetPosition, offsetPosition + normal)
+end
+
+local function isWall(part)
+	-- Check if the part is a wall by testing if it's collidable
+	return part.CanCollide
+end
+
+local function climbWall()
+	local origin = rootPart.Position
+	local direction = rootPart.CFrame.LookVector
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+	raycastParams.FilterDescendantsInstances = {character}
+
+	local result = workspace:Raycast(origin, direction * distanceThreshold, raycastParams)
+	if result and isWall(result.Instance) then
+		local position = result.Position
+		local normal = result.Normal
+		createTruss(position, normal)
+
+		-- Disable character controls temporarily
+		humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+
+		-- Re-enable character controls
+		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+		wait(0.1)
+		humanoid:ChangeState(Enum.HumanoidStateType.Running)
+	end
+end
+
+humanoid.Jumping:Connect(function()
+	climbWall()
+end)
