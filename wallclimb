@@ -1,5 +1,5 @@
 local distanceThreshold = 10  -- Maximum distance to detect walls
-local trussOffset = Vector3.new(0.6, 0, 0)  -- Offset position for the truss
+local trussOffset = Vector3.new(-0.8, 0, 0)  -- Offset position for the truss
 
 local player = game.Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
@@ -7,6 +7,7 @@ local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
 local trussPart = nil -- Variable to hold the created truss part
+local isClimbing = false -- Track whether the character is currently climbing
 
 local function createTruss(position, normal)
 	if trussPart then
@@ -18,10 +19,10 @@ local function createTruss(position, normal)
 	trussPart = Instance.new("TrussPart")
 	trussPart.Anchored = true
 	trussPart.BrickColor = BrickColor.new("Bright yellow")
-	trussPart.Size = Vector3.new(5, 1, 1)
+	trussPart.Size = Vector3.new(1, 10, 1)
 
 	-- Calculate the offset position in front of the character
-	local offsetPosition = position + (rootPart.CFrame.LookVector * trussOffset)
+	local offsetPosition = position + (normal * trussOffset)
 	trussPart.Position = offsetPosition
 	trussPart.Parent = workspace
 
@@ -29,12 +30,25 @@ local function createTruss(position, normal)
 	trussPart.CFrame = CFrame.new(offsetPosition, offsetPosition + normal)
 end
 
-local function isWall(part)
-	-- Check if the part is a wall by testing if it's collidable
-	return part.CanCollide
+local function destroyTruss()
+	if trussPart then
+		trussPart:Destroy()
+		trussPart = nil
+	end
+end
+
+local function isTruss(part)
+	-- Check if the part is a truss by testing its ClassName
+	return part.ClassName == "TrussPart"
 end
 
 local function climbWall()
+	if isClimbing then
+		return
+	end
+
+	isClimbing = true
+
 	local origin = rootPart.Position
 	local direction = rootPart.CFrame.LookVector
 	local raycastParams = RaycastParams.new()
@@ -42,7 +56,7 @@ local function climbWall()
 	raycastParams.FilterDescendantsInstances = {character}
 
 	local result = workspace:Raycast(origin, direction * distanceThreshold, raycastParams)
-	if result and isWall(result.Instance) then
+	if result and not isTruss(result.Instance) then
 		local position = result.Position
 		local normal = result.Normal
 		createTruss(position, normal)
@@ -50,11 +64,16 @@ local function climbWall()
 		-- Disable character controls temporarily
 		humanoid:ChangeState(Enum.HumanoidStateType.Physics)
 
-		-- Re-enable character controls
+		-- Re-enable character controls after a delay
+		wait(0.1)
 		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 		wait(0.1)
 		humanoid:ChangeState(Enum.HumanoidStateType.Running)
+	else
+		destroyTruss()
 	end
+
+	isClimbing = false
 end
 
 humanoid.Jumping:Connect(function()
