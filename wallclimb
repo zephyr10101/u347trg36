@@ -1,4 +1,4 @@
-local distanceThreshold = 10  -- Maximum distance to detect walls
+local distanceThreshold = 6  -- Maximum distance to detect walls
 local trussOffset = Vector3.new(-0.8, 0, 0)  -- Offset position for the truss
 
 local player = game.Players.LocalPlayer
@@ -8,6 +8,7 @@ local rootPart = character:WaitForChild("HumanoidRootPart")
 
 local trussPart = nil -- Variable to hold the created truss part
 local isClimbing = false -- Track whether the character is currently climbing
+local previousTouchedPart = nil -- Variable to store the previously touched part
 
 local function createTruss(position, normal)
 	if trussPart then
@@ -18,8 +19,8 @@ local function createTruss(position, normal)
 
 	trussPart = Instance.new("TrussPart")
 	trussPart.Anchored = true
-	trussPart.BrickColor = BrickColor.new("Bright yellow")
-	trussPart.Size = Vector3.new(1, 10, 1)
+	trussPart.Transparency = .5
+	trussPart.Size = Vector3.new(2, 4, 2)
 
 	-- Calculate the offset position in front of the character
 	local offsetPosition = position + (normal * trussOffset)
@@ -43,7 +44,7 @@ local function isTruss(part)
 end
 
 local function climbWall()
-	if isClimbing then
+	if isClimbing or trussPart then
 		return
 	end
 
@@ -69,13 +70,47 @@ local function climbWall()
 		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 		wait(0.1)
 		humanoid:ChangeState(Enum.HumanoidStateType.Running)
-	else
-		destroyTruss()
+
+		-- Store the touched part for comparison
+		previousTouchedPart = result.Instance
 	end
 
 	isClimbing = false
 end
 
-humanoid.Jumping:Connect(function()
+-- Create GUI and button
+local playerGui = player:WaitForChild("PlayerGui")
+local gui = Instance.new("ScreenGui")
+gui.ResetOnSpawn = false
+gui.Parent = playerGui
+
+local button = Instance.new("TextButton")
+button.Size = UDim2.new(0, 100, 0, 50)
+button.Position = UDim2.new(0.5, -50, 0.8, -25)
+button.BackgroundColor3 = Color3.fromRGB(0, 25, 38)
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.Text = "Wall Climb (C)"
+button.Parent = gui
+
+-- Button event
+button.MouseButton1Click:Connect(function()
 	climbWall()
 end)
+
+game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
+	if not processed and input.KeyCode == Enum.KeyCode.C then
+		climbWall()
+	end
+end)
+
+-- Loop to update truss position and check distance
+while true do
+	if trussPart then
+		trussPart.Position = Vector3.new(trussPart.Position.X, rootPart.Position.Y, trussPart.Position.Z)
+		local distance = (trussPart.Position - rootPart.Position).Magnitude
+		if distance > distanceThreshold or (previousTouchedPart and rootPart.Position.Y >= previousTouchedPart.Position.Y * 2 + 4) then
+			destroyTruss()
+		end
+	end
+	wait(0.1) -- Adjust the delay as needed
+end
